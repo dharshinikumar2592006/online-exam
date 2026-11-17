@@ -8,12 +8,14 @@ const {
   autoSubmit,
   reportViolation,
   getSession,
-  getExamResult
+  getExamResult,
+  retakeExam
 } = require('../controllers/dfaExamController');
 const { protect } = require('../middleware/auth');
 
 // All exam DFA transitions require authentication (user in S1 or beyond)
 router.post('/access/:examId', protect, requestExamAccess);
+router.post('/retake/:examId', protect, retakeExam);
 router.post('/start/:examId', protect, startExam);
 router.get('/session/:examId', protect, getSession);
 router.post('/answer/:examId', protect, saveAnswer);

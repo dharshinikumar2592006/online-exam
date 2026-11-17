@@ -1,15 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { DFAStateBadge } from '../../components/DFAStateBadge';
 import { DFAVisualGraph } from '../../components/DFAVisualGraph';
-import { Award, CheckCircle2, XCircle, Clock, ArrowLeft, History, BookOpen, AlertTriangle } from 'lucide-react';
+import { Award, CheckCircle2, XCircle, Clock, ArrowLeft, History, BookOpen, AlertTriangle, RotateCcw } from 'lucide-react';
 
 export const ExamResult = () => {
   const { examId } = useParams();
+  const navigate = useNavigate();
   const [resultData, setResultData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retaking, setRetaking] = useState(false);
+
+  const handleRetake = async () => {
+    setRetaking(true);
+    try {
+      await api.retakeExam(examId);
+      navigate(`/student/instructions/${examId}`);
+    } catch (err) {
+      alert(`Could not retake exam: ${err.message}`);
+      setRetaking(false);
+    }
+  };
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -56,11 +69,20 @@ export const ExamResult = () => {
   return (
     <div style={{ maxWidth: '880px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       {/* Top Navigation */}
-      <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
         <Link to="/student" className="btn btn-outline btn-sm">
           <ArrowLeft size={16} />
           <span>Back to My Examinations</span>
         </Link>
+
+        <button
+          onClick={handleRetake}
+          disabled={retaking}
+          className="btn btn-primary btn-sm"
+        >
+          <RotateCcw size={15} />
+          <span>{retaking ? 'Preparing MCQs...' : 'Retake This Exam (Answer MCQs)'}</span>
+        </button>
       </div>
 
       {/* Main Scorecard Banner */}

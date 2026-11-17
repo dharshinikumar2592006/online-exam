@@ -71,14 +71,21 @@ exports.requestExamAccess = async (req, res) => {
     // Check if an existing session already exists
     let session = await ExamSession.findOne({ examId, studentId });
 
+    // Allow student to retake by passing retake parameter
+    if (req.query.retake === 'true' || req.body.retake === true) {
+      await ExamSession.deleteMany({ examId, studentId });
+      session = null;
+    }
+
     if (session) {
-      // If already in accepting states, cannot re-request
+      // If already in accepting states, inform client
       if (session.currentState === DFA_STATES.S4 || session.currentState === DFA_STATES.S5) {
         return res.status(400).json({
           success: false,
           error: `Exam already submitted. Current state: ${session.currentState} (${DFA_STATE_INFO[session.currentState]?.label})`,
           code: 'EXAM_ALREADY_COMPLETED',
-          currentState: session.currentState
+          currentState: session.currentState,
+          canRetake: true
         });
       }
 
@@ -646,5 +653,65 @@ exports.getExamResult = async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// @desc Retake exam: reset attempt and grant fresh access (DFA: S1 -> S2)
+// @route POST /api/dfa/retake/:examId
+exports.retakeExam = async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const studentId = req.user._id;
+
+    const exam = await Exam.findById(examId);
+    if (!exam || !exam.isActive) {
+      return res.status(404).json({ success: false, error: 'Exam not found or inactive' });
+    }
+
+    if (req.user.isBlocked) {
+      return res.status(403).json({ success: false, error: 'Student is blocked (S6)', dfaState: DFA_STATES.S6 });
+    }
+
+    // Delete existing sessions for this student and exam
+    await ExamSession.deleteMany({ examId, studentId });
+
+    // Create fresh session in S1
+    const session = new ExamSession({
+      examId,
+      studentId,
+      currentState: DFA_STATES.S1,
+      totalMarks: exam.totalMarks
+    });
+
+    // DFA Transition S1 -> S2
+    await dfaEngine.executeTransition(session, DFA_SYMBOLS.REQUEST_EXAM_ACCESS, {
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+      reason: 'Student initiated fresh exam retake'
+    });
+
+    return res.json({
+      success: true,
+      message: 'Exam session reset. DFA: S1 (AUTHENTICATED) -> S2 (EXAM_ACCESS_GRANTED)',
+      dfa: {
+        previousState: DFA_STATES.S1,
+        currentState: DFA_STATES.S2,
+        event: DFA_SYMBOLS.REQUEST_EXAM_ACCESS,
+        timestamp: new Date()
+      },
+      exam: {
+        id: exam._id,
+        title: exam.title,
+        description: exam.description,
+        durationMinutes: exam.durationMinutes,
+        passingMarks: exam.passingMarks,
+        totalMarks: exam.totalMarks,
+        questionCount: exam.questions.length,
+        instructions: exam.instructions
+      },
+      session
+    });
+  } catch (err) {
+    return res.status(400).json({ success: false, error: err.message, code: err.code || 'DFA_ERROR' });
   }
 };

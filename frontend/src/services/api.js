@@ -103,8 +103,16 @@ export const api = {
   },
 
   // DFA State Transitions
-  requestExamAccess: async (examId) => {
-    const res = await fetch(`${BASE_URL}/dfa/access/${examId}`, {
+  requestExamAccess: async (examId, retake = false) => {
+    const res = await fetch(`${BASE_URL}/dfa/access/${examId}${retake ? '?retake=true' : ''}`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  retakeExam: async (examId) => {
+    const res = await fetch(`${BASE_URL}/dfa/retake/${examId}`, {
       method: 'POST',
       headers: getAuthHeaders()
     });

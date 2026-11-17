@@ -45,6 +45,17 @@ export const ExamRoom = () => {
         }
         setAnswers(answerMap);
       } catch (err) {
+        if (err.data?.code === 'ACCESS_NOT_REQUESTED') {
+          try {
+            await api.requestExamAccess(examId);
+            const retryRes = await api.startExam(examId);
+            setQuestions(retryRes.questions || []);
+            setTimeRemaining(retryRes.timeRemainingSeconds || 0);
+            return;
+          } catch (retryErr) {
+            // fall through to error handling
+          }
+        }
         if (err.data?.currentState === 'SUBMITTED' || err.data?.currentState === 'AUTO_SUBMITTED') {
           return navigate(`/student/results/${examId}`, { replace: true });
         }

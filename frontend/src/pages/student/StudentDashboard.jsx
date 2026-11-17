@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import { DFAStateBadge } from '../../components/DFAStateBadge';
 import { DFAVisualGraph } from '../../components/DFAVisualGraph';
-import { BookOpen, Clock, Award, ArrowRight, CheckCircle2, AlertTriangle, ShieldCheck, RefreshCw } from 'lucide-react';
+import { BookOpen, Clock, Award, ArrowRight, CheckCircle2, AlertTriangle, ShieldCheck, RefreshCw, RotateCcw } from 'lucide-react';
 
 export const StudentDashboard = () => {
   const { user } = useAuth();
@@ -29,20 +29,25 @@ export const StudentDashboard = () => {
     fetchExams();
   }, []);
 
-  const handleStartOrResume = (exam) => {
+  const handleStartExam = async (exam) => {
     const session = exam.session;
-    if (session?.currentState === 'SUBMITTED' || session?.currentState === 'AUTO_SUBMITTED') {
-      navigate(`/student/results/${exam._id}`);
-    } else if (session?.currentState === 'EXAM_IN_PROGRESS') {
+    if (session?.currentState === 'EXAM_IN_PROGRESS') {
       navigate(`/student/exam/${exam._id}`);
     } else {
-      // Direct to instructions to request access S1 -> S2
       navigate(`/student/instructions/${exam._id}`);
     }
   };
 
+  const handleRetakeExam = async (examId) => {
+    try {
+      await api.retakeExam(examId);
+      navigate(`/student/instructions/${examId}`);
+    } catch (err) {
+      alert(`Could not reset exam: ${err.message}`);
+    }
+  };
+
   const completedExams = exams.filter(e => e.session && ['SUBMITTED', 'AUTO_SUBMITTED'].includes(e.session.currentState));
-  const availableExams = exams.filter(e => !e.session || !['SUBMITTED', 'AUTO_SUBMITTED'].includes(e.session.currentState));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -82,7 +87,7 @@ export const StudentDashboard = () => {
       {/* DFA Visualizer */}
       <DFAVisualGraph currentState={user?.currentState || 'AUTHENTICATED'} compact={true} />
 
-      {/* Available / In-Progress Examinations */}
+      {/* Available Examinations List */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
           <div>
@@ -94,7 +99,7 @@ export const StudentDashboard = () => {
             </p>
           </div>
           <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>
-            {availableExams.length} Available
+            {exams.length} Total Exams
           </span>
         </div>
 
@@ -115,17 +120,17 @@ export const StudentDashboard = () => {
           <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
             Loading available examinations...
           </div>
-        ) : availableExams.length === 0 ? (
+        ) : exams.length === 0 ? (
           <div className="card" style={{ textAlign: 'center', padding: '3rem 1.5rem', color: '#64748b' }}>
             <BookOpen size={40} style={{ opacity: 0.35, marginBottom: '0.75rem' }} />
-            <p style={{ fontWeight: 600 }}>No exams currently pending!</p>
-            <p style={{ fontSize: '0.875rem' }}>You have completed all published exams or none are currently scheduled.</p>
+            <p style={{ fontWeight: 600 }}>No examinations found</p>
           </div>
         ) : (
           <div className="grid grid-cols-2" style={{ gap: '1.25rem' }}>
-            {availableExams.map((exam) => {
+            {exams.map((exam) => {
               const session = exam.session;
               const isInProgress = session?.currentState === 'EXAM_IN_PROGRESS';
+              const isCompleted = session?.currentState === 'SUBMITTED' || session?.currentState === 'AUTO_SUBMITTED';
               const isBlocked = session?.currentState === 'BLOCKED';
 
               return (
@@ -133,7 +138,7 @@ export const StudentDashboard = () => {
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
-                  borderTop: isInProgress ? '4px solid #eab308' : isBlocked ? '4px solid #ef4444' : '4px solid #2563eb'
+                  borderTop: isInProgress ? '4px solid #eab308' : isCompleted ? '4px solid #10b981' : isBlocked ? '4px solid #ef4444' : '4px solid #2563eb'
                 }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.75rem' }}>
@@ -205,13 +210,39 @@ export const StudentDashboard = () => {
                         <AlertTriangle size={18} />
                         <span>Session Blocked (DFA: S6). Contact admin to unblock.</span>
                       </div>
-                    ) : (
+                    ) : isCompleted ? (
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          onClick={() => handleRetakeExam(exam._id)}
+                          className="btn btn-primary"
+                          style={{ flex: 1 }}
+                        >
+                          <RotateCcw size={16} />
+                          <span>Retake Exam (MCQs)</span>
+                        </button>
+                        <Link
+                          to={`/student/results/${exam._id}`}
+                          className="btn btn-outline"
+                        >
+                          Scorecard
+                        </Link>
+                      </div>
+                    ) : isInProgress ? (
                       <button
-                        onClick={() => handleStartOrResume(exam)}
-                        className={`btn ${isInProgress ? 'btn-secondary' : 'btn-primary'}`}
+                        onClick={() => handleStartExam(exam)}
+                        className="btn btn-secondary"
                         style={{ width: '100%' }}
                       >
-                        <span>{isInProgress ? 'Resume Examination' : 'Request Access & Begin'}</span>
+                        <span>Resume Examination (Questions)</span>
+                        <ArrowRight size={16} />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleStartExam(exam)}
+                        className="btn btn-primary"
+                        style={{ width: '100%' }}
+                      >
+                        <span>Start Examination &bull; MCQs</span>
                         <ArrowRight size={16} />
                       </button>
                     )}
@@ -243,7 +274,7 @@ export const StudentDashboard = () => {
                   <th>Score</th>
                   <th>Percentage</th>
                   <th>Status</th>
-                  <th>Action</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -280,9 +311,19 @@ export const StudentDashboard = () => {
                         )}
                       </td>
                       <td>
-                        <Link to={`/student/results/${exam._id}`} className="btn btn-outline btn-sm">
-                          View Results
-                        </Link>
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <Link to={`/student/results/${exam._id}`} className="btn btn-outline btn-sm">
+                            View Results
+                          </Link>
+                          <button
+                            onClick={() => handleRetakeExam(exam._id)}
+                            className="btn btn-primary btn-sm"
+                            title="Retake multiple choice questions"
+                          >
+                            <RotateCcw size={14} />
+                            <span>Retake</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

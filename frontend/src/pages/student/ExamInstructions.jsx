@@ -22,16 +22,23 @@ export const ExamInstructions = () => {
       setError('');
       try {
         // Trigger DFA transition S1 -> S2 (EXAM_ACCESS_GRANTED)
-        const accessRes = await api.requestExamAccess(examId);
+        let accessRes;
+        try {
+          accessRes = await api.requestExamAccess(examId);
+        } catch (initialErr) {
+          // If already completed previously, automatically reset attempt so student can retake questions
+          if (initialErr.data?.code === 'EXAM_ALREADY_COMPLETED' || initialErr.data?.canRetake) {
+            accessRes = await api.retakeExam(examId);
+          } else {
+            throw initialErr;
+          }
+        }
         setExam(accessRes.exam);
         setSession(accessRes.session);
       } catch (err) {
         if (err.data?.currentState === 'EXAM_IN_PROGRESS') {
           // If already in progress, navigate straight to the exam room
           return navigate(`/student/exam/${examId}`, { replace: true });
-        }
-        if (err.data?.currentState === 'SUBMITTED' || err.data?.currentState === 'AUTO_SUBMITTED') {
-          return navigate(`/student/results/${examId}`, { replace: true });
         }
         setError(err.message || 'Failed to request exam access');
       } finally {
