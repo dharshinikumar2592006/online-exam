@@ -6,7 +6,19 @@
 
 import { MOCK_EXAMS, DFA_SPEC_DATA } from './mockDfaData';
 
-const BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const getBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  // On localhost, use local backend
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return '/api';
+  }
+  // On Vercel, connect directly to the live Render backend
+  return 'https://online-exam-1-3wr6.onrender.com/api';
+};
+
+const BASE_URL = getBaseUrl();
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
